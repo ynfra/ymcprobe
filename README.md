@@ -19,8 +19,10 @@ separate API key and no account.
 make            # target list, variables and examples
 make deps
 
-# or build a standalone binary and put it on PATH
-make install    # -> ~/.local/bin/ymcprobe, no bun needed to run it
+# put ymcprobe on PATH — pick one
+make link       # symlink to the sources: instant, always current, needs bun
+make install    # copy a standalone binary: no bun needed to run it
+
 ymcprobe http://localhost:8080/mcp
 
 # chat against one MCP server
@@ -55,8 +57,10 @@ bun run src/cli.tsx http://127.0.0.1:8080/mcp
 | `bun run fixture` | `:8080/mcp`, `PORT=` to move it | 4-tool MCP server for testing ymcprobe itself |
 | `bun run preview` | no LLM, no server | Render the TUI against scripted events |
 | `bun run smoke` | needs the fixture running | End-to-end check that tool events still arrive |
+| `make link` | `PREFIX=~/.local/bin` | Symlink the sources onto PATH |
 | `make build` | `dist/ymcprobe`, ~62 MB | Compile a standalone binary |
-| `make install` | `PREFIX=~/.local/bin` | Build and put it on PATH |
+| `make install` | `PREFIX=~/.local/bin` | Copy that binary onto PATH |
+| `make uninstall` | | Remove whatever `link`/`install` put there |
 | `bun run typecheck` | `tsc --noEmit` | Type check |
 
 `make` wraps the common paths: `make run URL=…`, `make web URL=…`,
@@ -88,6 +92,10 @@ Flags: `-H/--header` (repeatable), `-m/--model`, `--models`, `-p/--port`,
 - Long tool output is clamped in the web UI with a **show more** toggle, and
   truncated to one line each in the TUI. One chatty tool otherwise pushes the
   whole trace off screen.
+- `make link` is the one to use while developing: it points at the working
+  tree, so an edit is live on the next run with no rebuild. `make install`
+  is the one to hand someone who does not have bun. Both land in `PREFIX`
+  (default `~/.local/bin`) and `make uninstall` removes either.
 - The compiled binary still needs **`opencode` on PATH** — it embeds ymcprobe,
   not the agent it drives.
 - Permission prompts are auto-approved. This is a test harness, so do not aim

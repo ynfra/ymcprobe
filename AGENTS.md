@@ -145,6 +145,20 @@ several servers, a dead one, a failed call — with no LLM spend.
   count and the column stops being scannable — real tool names like
   `fetch_support_article` are long enough to hit this.
 
+## Getting it onto PATH
+
+Two targets, both writing to `PREFIX` (default `~/.local/bin`, the XDG-ish
+convention), both undone by `make uninstall`:
+
+- **`make link`** symlinks `src/cli.tsx`, which carries a `#!/usr/bin/env bun`
+  shebang and is committed executable. No build, and edits are live on the next
+  run. This is the development path.
+- **`make install`** builds and copies the standalone binary, for a machine
+  without bun.
+
+`install` over a symlink and `link` over a binary both work; `uninstall`
+removes either.
+
 ## Compiling a standalone binary
 
 `make build` produces `dist/ymcprobe` (~62 MB) that runs without bun. It still

@@ -33,7 +33,8 @@ help: ## Show this help
 	@echo "  make run URL=http://localhost:8787/mcp"
 	@echo "  make web URL=http://localhost:8787/mcp ARGS='--all-tools'"
 	@echo "  make fixture PORT=8081 &"
-	@echo "  make build && make install     # standalone binary on PATH"
+	@echo "  make link                      # ymcprobe on PATH, runs from source"
+	@echo "  make install                   # ymcprobe on PATH, standalone binary"
 	@echo
 	@echo "Full flag list: bun run src/cli.tsx --help"
 
@@ -47,15 +48,23 @@ build: ## Compile a standalone binary into dist/ (no bun needed to run it)
 	bun build src/cli.tsx --compile --outfile $(BIN)
 	@ls -lh $(BIN)
 
+.PHONY: link
+link: ## Symlink the sources onto PATH — no build, always current, needs bun
+	@mkdir -p $(PREFIX)
+	@chmod +x src/cli.tsx
+	ln -sf $(abspath src/cli.tsx) $(PREFIX)/ymcprobe
+	@echo "linked $(PREFIX)/ymcprobe -> src/cli.tsx"
+	@command -v ymcprobe >/dev/null || echo "note: $(PREFIX) is not on your PATH"
+
 .PHONY: install
-install: build ## Build, then put the binary on PATH at PREFIX
+install: build ## Copy the standalone binary onto PATH — no bun needed to run it
 	@mkdir -p $(PREFIX)
 	install -m 755 $(BIN) $(PREFIX)/ymcprobe
 	@echo "installed $(PREFIX)/ymcprobe"
 	@command -v ymcprobe >/dev/null || echo "note: $(PREFIX) is not on your PATH"
 
 .PHONY: uninstall
-uninstall: ## Remove the installed binary
+uninstall: ## Remove whatever link or install put at PREFIX
 	rm -f $(PREFIX)/ymcprobe
 
 .PHONY: run
