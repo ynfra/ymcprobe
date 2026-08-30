@@ -100,6 +100,7 @@ separated), `MCP_MODEL` and `MCP_PROMPT` override what it exercises.
 | `src/preview.tsx` | renders the TUI against scripted events, no LLM spend |
 | `src/smoke.ts` | headless end-to-end assertion |
 | `fixtures/echo-mcp.ts` | 4-tool MCP server (`echo`, `add`, `boom`, `lorem`) |
+| `Makefile` | `make` with no target prints the help; targets self-document via `## ` |
 
 The fixture is one tool per branch the UI has to render: `echo` and `add`
 succeed, `boom` always fails, and `lorem` returns more text than fits on

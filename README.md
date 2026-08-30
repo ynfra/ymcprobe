@@ -16,7 +16,8 @@ separate API key and no account.
 ## Usage
 
 ```bash
-bun install
+make            # target list, variables and examples
+make install
 
 # chat against one MCP server
 bun run src/cli.tsx http://localhost:8080/mcp
@@ -51,6 +52,10 @@ bun run src/cli.tsx http://127.0.0.1:8080/mcp
 | `bun run preview` | no LLM, no server | Render the TUI against scripted events |
 | `bun run smoke` | needs the fixture running | End-to-end check that tool events still arrive |
 | `bun run typecheck` | `tsc --noEmit` | Type check |
+
+`make` wraps the common paths: `make run URL=…`, `make web URL=…`,
+`make json URL=…`, `make fixture PORT=8081`, `make preview`, `make smoke`.
+Extra flags go through as `ARGS='…'`.
 
 Flags: `-H/--header` (repeatable), `-m/--model`, `--models`, `-p/--port`,
 `--system <text>`, `--no-system`, `--all-tools`, `--web`, `--json`, `-h`.
