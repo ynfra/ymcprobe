@@ -147,17 +147,17 @@ several servers, a dead one, a failed call — with no LLM spend.
 
 ## Getting it onto PATH
 
-Two targets, both writing to `PREFIX` (default `~/.local/bin`, the XDG-ish
-convention), both undone by `make uninstall`:
+`make install` installs *dependencies* — it does not touch PATH. Two other
+targets do, both building first and both writing to `PREFIX` (default
+`~/.local/bin`), both undone by `make uninstall`:
 
-- **`make link`** symlinks `src/cli.tsx`, which carries a `#!/usr/bin/env bun`
-  shebang and is committed executable. No build, and edits are live on the next
-  run. This is the development path.
-- **`make install`** builds and copies the standalone binary, for a machine
-  without bun.
+- **`make link`** symlinks `PREFIX/ymcprobe` at `dist/ymcprobe`, so the next
+  `make build` is live with no reinstall. The development path.
+- **`make distribute`** copies the binary, so the command survives this
+  checkout moving or being deleted.
 
-`install` over a symlink and `link` over a binary both work; `uninstall`
-removes either.
+`distribute` deletes any existing entry before copying: run over a `make link`
+symlink, `install(1)` follows it and refuses with "are the same file".
 
 ## Compiling a standalone binary
 

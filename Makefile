@@ -33,13 +33,14 @@ help: ## Show this help
 	@echo "  make run URL=http://localhost:8787/mcp"
 	@echo "  make web URL=http://localhost:8787/mcp ARGS='--all-tools'"
 	@echo "  make fixture PORT=8081 &"
-	@echo "  make link                      # ymcprobe on PATH, runs from source"
-	@echo "  make install                   # ymcprobe on PATH, standalone binary"
+	@echo "  make install                   # dependencies"
+	@echo "  make link                      # ymcprobe on PATH, symlinked to dist/"
+	@echo "  make distribute                # ymcprobe on PATH, copied"
 	@echo
 	@echo "Full flag list: bun run src/cli.tsx --help"
 
-.PHONY: deps
-deps: ## Install dependencies
+.PHONY: install
+install: ## Install dependencies
 	bun install
 
 .PHONY: build
@@ -49,22 +50,24 @@ build: ## Compile a standalone binary into dist/ (no bun needed to run it)
 	@ls -lh $(BIN)
 
 .PHONY: link
-link: ## Symlink the sources onto PATH — no build, always current, needs bun
+link: build ## Symlink the built binary into PREFIX — rebuilds are picked up
 	@mkdir -p $(PREFIX)
-	@chmod +x src/cli.tsx
-	ln -sf $(abspath src/cli.tsx) $(PREFIX)/ymcprobe
-	@echo "linked $(PREFIX)/ymcprobe -> src/cli.tsx"
+	ln -sf $(abspath $(BIN)) $(PREFIX)/ymcprobe
+	@echo "linked $(PREFIX)/ymcprobe -> $(BIN)"
 	@command -v ymcprobe >/dev/null || echo "note: $(PREFIX) is not on your PATH"
 
-.PHONY: install
-install: build ## Copy the standalone binary onto PATH — no bun needed to run it
+.PHONY: distribute
+distribute: build ## Copy the built binary into PREFIX — survives deleting this tree
 	@mkdir -p $(PREFIX)
+	@# Drop any existing entry first: over a `make link` symlink, install(1)
+	@# follows it and refuses with "are the same file".
+	@rm -f $(PREFIX)/ymcprobe
 	install -m 755 $(BIN) $(PREFIX)/ymcprobe
-	@echo "installed $(PREFIX)/ymcprobe"
+	@echo "copied $(BIN) -> $(PREFIX)/ymcprobe"
 	@command -v ymcprobe >/dev/null || echo "note: $(PREFIX) is not on your PATH"
 
 .PHONY: uninstall
-uninstall: ## Remove whatever link or install put at PREFIX
+uninstall: ## Remove whatever link or distribute put at PREFIX
 	rm -f $(PREFIX)/ymcprobe
 
 .PHONY: run
