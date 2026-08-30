@@ -1,1 +1,5 @@
 node_modules/
+dist/
+
+# bun build --compile scratch files
+*.bun-build

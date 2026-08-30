@@ -101,6 +101,8 @@ separated), `MCP_MODEL` and `MCP_PROMPT` override what it exercises.
 | `src/smoke.ts` | headless end-to-end assertion |
 | `fixtures/echo-mcp.ts` | 4-tool MCP server (`echo`, `add`, `boom`, `lorem`) |
 | `Makefile` | `make` with no target prints the help; targets self-document via `## ` |
+| `src/bundle-client.ts` | build-time macro that inlines the browser bundle |
+| `stubs/react-devtools-core/` | stub so `--compile` can resolve ink's dev-only import |
 
 The fixture is one tool per branch the UI has to render: `echo` and `add`
 succeed, `boom` always fails, and `lorem` returns more text than fits on
@@ -142,6 +144,29 @@ several servers, a dead one, a failed call — with no LLM spend.
 - **Sidebar names ellipsize, never wrap.** A wrapped name desyncs from its
   count and the column stops being scannable — real tool names like
   `fetch_support_article` are long enough to hit this.
+
+## Compiling a standalone binary
+
+`make build` produces `dist/ymcprobe` (~62 MB) that runs without bun. It still
+needs `opencode` on PATH — the binary embeds ymcprobe, not the agent it drives.
+
+Two things had to change to make that possible, and both will look like
+pointless indirection to anyone who did not hit them:
+
+- **The browser client is bundled by a build-time macro**, `src/bundle-client.ts`
+  imported `with { type: "macro" }`. A compiled binary has no source tree, so
+  the old runtime `Bun.build()` call failed the moment ymcprobe ran from
+  anywhere but this directory. The macro shells out to `bun build` rather than
+  calling `Bun.build()` directly — a macro cannot start a second bundle while
+  the bundler is waiting on it.
+- **`stubs/react-devtools-core/` exists so the import resolves.** ink's
+  reconciler does `await import('./devtools.js')` behind an `isDev()` guard,
+  and that module statically imports `react-devtools-core`. The guard is a
+  function call, so the branch cannot be proven dead: `--external` keeps it as
+  a runtime import and a compiled binary resolves those eagerly at startup
+  (`Cannot find package` before `main` runs), and `--define` misses it because
+  ink reads `process.env['DEV']` with bracket notation. A few-byte stub beats
+  pulling the real ~10 MB package in for a branch we never take.
 
 ## Why the web UI proxies everything
 

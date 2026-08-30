@@ -17,7 +17,11 @@ separate API key and no account.
 
 ```bash
 make            # target list, variables and examples
-make install
+make deps
+
+# or build a standalone binary and put it on PATH
+make install    # -> ~/.local/bin/ymcprobe, no bun needed to run it
+ymcprobe http://localhost:8080/mcp
 
 # chat against one MCP server
 bun run src/cli.tsx http://localhost:8080/mcp
@@ -51,6 +55,8 @@ bun run src/cli.tsx http://127.0.0.1:8080/mcp
 | `bun run fixture` | `:8080/mcp`, `PORT=` to move it | 4-tool MCP server for testing ymcprobe itself |
 | `bun run preview` | no LLM, no server | Render the TUI against scripted events |
 | `bun run smoke` | needs the fixture running | End-to-end check that tool events still arrive |
+| `make build` | `dist/ymcprobe`, ~62 MB | Compile a standalone binary |
+| `make install` | `PREFIX=~/.local/bin` | Build and put it on PATH |
 | `bun run typecheck` | `tsc --noEmit` | Type check |
 
 `make` wraps the common paths: `make run URL=…`, `make web URL=…`,
@@ -82,6 +88,8 @@ Flags: `-H/--header` (repeatable), `-m/--model`, `--models`, `-p/--port`,
 - Long tool output is clamped in the web UI with a **show more** toggle, and
   truncated to one line each in the TUI. One chatty tool otherwise pushes the
   whole trace off screen.
+- The compiled binary still needs **`opencode` on PATH** — it embeds ymcprobe,
+  not the agent it drives.
 - Permission prompts are auto-approved. This is a test harness, so do not aim
   it at an MCP server whose tools have real side effects.
 - TUI keys: `esc` interrupts a turn, `ctrl-u` clears the line, `ctrl-w` rubs

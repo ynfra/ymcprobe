@@ -7,6 +7,7 @@
 // The transcript logic is NOT reimplemented here — src/session.ts is bundled
 // for the browser so the web UI and the TUI fold events identically.
 
+import { clientBundle } from "./bundle-client.ts" with { type: "macro" }
 import type { OpencodeClient } from "./opencode.ts"
 import type { Server } from "./session.ts"
 
@@ -149,18 +150,8 @@ button[disabled] { opacity: .5; cursor: default; }
 }
 `
 
-async function bundle(): Promise<string> {
-  const built = await Bun.build({
-    entrypoints: [new URL("./web-client.ts", import.meta.url).pathname],
-    target: "browser",
-    minify: false,
-  })
-  if (!built.success) throw new AggregateError(built.logs, "web client bundle failed")
-  return await built.outputs[0]!.text()
-}
-
 export async function serve(ctx: WebContext): Promise<string> {
-  const script = await bundle()
+  const script = clientBundle()
   const page = HTML(script, CSS)
 
   let server: ReturnType<typeof Bun.serve>
