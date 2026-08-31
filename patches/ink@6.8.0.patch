@@ -1,0 +1,21 @@
+diff --git a/build/devtools.js b/build/devtools.js
+index 10afb3a8e8c7ba1c66e962e57a708586bd5cc5cb..e9cc8f99db9a6ddac4bcafcd89295f10f7b767df 100644
+--- a/build/devtools.js
++++ b/build/devtools.js
+@@ -1,11 +1,4 @@
+-/* eslint-disable import/order */
+-// eslint-disable-next-line import/no-unassigned-import
+-import './devtools-window-polyfill.js';
+-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+-// @ts-expect-error
+-import devtools from 'react-devtools-core';
+-// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+-devtools.initialize();
+-// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+-devtools.connectToDevTools();
+-//# sourceMappingURL=devtools.js.map
+\ No newline at end of file
++// Emptied by ymcprobe's ink patch: this module is ink's dev-only React
++// DevTools bridge and its `react-devtools-core` import is the only thing that
++// forced a stub package into the tree. See AGENTS.md.
++export {};

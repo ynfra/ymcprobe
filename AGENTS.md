@@ -102,7 +102,7 @@ separated), `MCP_MODEL` and `MCP_PROMPT` override what it exercises.
 | `fixtures/echo-mcp.ts` | 4-tool MCP server (`echo`, `add`, `boom`, `lorem`) |
 | `Makefile` | `make` with no target prints the help; targets self-document via `## ` |
 | `src/bundle-client.ts` | build-time macro that inlines the browser bundle |
-| `stubs/react-devtools-core/` | stub so `--compile` can resolve ink's dev-only import |
+| `patches/ink@6.8.0.patch` | empties ink's dev-only devtools module so nothing imports `react-devtools-core` |
 
 The fixture is one tool per branch the UI has to render: `echo` and `add`
 succeed, `boom` always fails, and `lorem` returns more text than fits on
@@ -147,16 +147,22 @@ several servers, a dead one, a failed call — with no LLM spend.
 
 ## Getting it onto PATH
 
-`make install` installs *dependencies* — it does not touch PATH. `make
-distribute` does: it builds `./ymcprobe` and symlinks it into `PREFIX`
-(default `~/.local/bin`); `make uninstall` removes the link.
+The Makefile follows `fxstack/fxgit`: `BIN` / `ENTRY` / `BIN_DIR` variables, a
+single `.PHONY` line, `help` as the default goal extracting `## ` comments, and
+`install` / `build` / `link` / `ship` / `clean` meaning what they do there.
+Keep it that way — the point is that every fx-style tool answers to the same
+five verbs.
+
+`make install` installs *dependencies* and does not touch PATH. `make link`
+symlinks `$(CURDIR)/ymcprobe` into `~/.local/bin`, `make ship` is `build` then
+`link`, and `make uninstall` removes the symlink.
 
 The symlink means a rebuild needs no reinstall, at the cost of `make clean`
 leaving it dangling until the next `make build`.
 
 ## Compiling a standalone binary
 
-`make build` produces `./ymcprobe` (~62 MB) that runs without bun. It still
+`make build` produces a minified `./ymcprobe` (~61 MB) that runs without bun. It still
 needs `opencode` on PATH — the binary embeds ymcprobe, not the agent it drives.
 
 **`bun build --compile` leaves a 63 MB `.<hash>-00000000.bun-build` scratch
@@ -173,14 +179,41 @@ pointless indirection to anyone who did not hit them:
   anywhere but this directory. The macro shells out to `bun build` rather than
   calling `Bun.build()` directly — a macro cannot start a second bundle while
   the bundler is waiting on it.
-- **`stubs/react-devtools-core/` exists so the import resolves.** ink's
-  reconciler does `await import('./devtools.js')` behind an `isDev()` guard,
-  and that module statically imports `react-devtools-core`. The guard is a
-  function call, so the branch cannot be proven dead: `--external` keeps it as
-  a runtime import and a compiled binary resolves those eagerly at startup
-  (`Cannot find package` before `main` runs), and `--define` misses it because
-  ink reads `process.env['DEV']` with bracket notation. A few-byte stub beats
-  pulling the real ~10 MB package in for a branch we never take.
+- **ink is patched to drop its React DevTools bridge**, via
+  `patchedDependencies` in `package.json` and `patches/ink@6.8.0.patch`. The
+  patch empties `ink/build/devtools.js`, whose `react-devtools-core` import is
+  the only reason that package was ever referenced here.
+
+  It has to be a patch, because the import cannot be routed around. ink's
+  reconciler does `await import('./devtools.js')` behind an `isDev()` guard;
+  the guard is a function call, so the branch is never provably dead and the
+  bundler always walks into `devtools.js`. Measured, all failing:
+
+  | Attempt | Result |
+  |---|---|
+  | just remove it | `Could not resolve: "react-devtools-core"`, no binary |
+  | `--external react-devtools-core` | builds; binary dies at startup with `Cannot find package` |
+  | `--external './devtools.js'` | still resolves the inner import |
+  | `--define process.env.DEV="false"` | missed: ink reads `process.env['DEV']` with bracket notation |
+  | `--allow-unresolved '*'` | only covers dynamic specifiers, this one is static |
+  | `--conditions production` | no effect |
+
+  Two earlier shapes of this workaround are gone: a `stubs/react-devtools-core/`
+  fake package wired in as a `file:` dependency, and a `tsconfig.json` `paths`
+  alias to a local noop module. Both worked; the patch is preferable because it
+  leaves no phantom package in `dependencies` and no file whose only purpose is
+  to be resolved.
+
+  **Do not "fix" this by upgrading to ink 7.** ink 7 does guard the import with
+  `import.meta.resolve` in a try/catch, but the bundler still walks into
+  `devtools.js`, so the build fails exactly the same way — and ink 7 renders
+  nothing when stdout is piped, which silently kills `bun run preview | …`
+  (190 lines of TUI on ink 6.8.0, zero on 7.1.1).
+
+  **On an ink bump `bun install` will fail because the patch no longer
+  applies.** That is the intended alarm, not a problem: regenerate with
+  `bun patch ink`, empty `build/devtools.js`, `bun patch --commit ink`, then
+  re-check `bun run preview | wc -l` against 190.
 
 ## Why the web UI proxies everything
 
