@@ -147,22 +147,22 @@ several servers, a dead one, a failed call — with no LLM spend.
 
 ## Getting it onto PATH
 
-`make install` installs *dependencies* — it does not touch PATH. Two other
-targets do, both building first and both writing to `PREFIX` (default
-`~/.local/bin`), both undone by `make uninstall`:
+`make install` installs *dependencies* — it does not touch PATH. `make
+distribute` does: it builds `./ymcprobe` and symlinks it into `PREFIX`
+(default `~/.local/bin`); `make uninstall` removes the link.
 
-- **`make link`** symlinks `PREFIX/ymcprobe` at `dist/ymcprobe`, so the next
-  `make build` is live with no reinstall. The development path.
-- **`make distribute`** copies the binary, so the command survives this
-  checkout moving or being deleted.
-
-`distribute` deletes any existing entry before copying: run over a `make link`
-symlink, `install(1)` follows it and refuses with "are the same file".
+The symlink means a rebuild needs no reinstall, at the cost of `make clean`
+leaving it dangling until the next `make build`.
 
 ## Compiling a standalone binary
 
-`make build` produces `dist/ymcprobe` (~62 MB) that runs without bun. It still
+`make build` produces `./ymcprobe` (~62 MB) that runs without bun. It still
 needs `opencode` on PATH — the binary embeds ymcprobe, not the agent it drives.
+
+**`bun build --compile` leaves a 63 MB `.<hash>-00000000.bun-build` scratch
+file behind on every single run.** `make build` deletes them itself rather than
+leaving it to `clean`, because they are gitignored and invisible: this tree had
+accumulated ten of them, 718 MB, before anyone looked.
 
 Two things had to change to make that possible, and both will look like
 pointless indirection to anyone who did not hit them:

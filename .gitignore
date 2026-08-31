@@ -1,5 +1,7 @@
 node_modules/
-dist/
+
+# the compiled binary
+/ymcprobe
 
 # bun build --compile scratch files
 *.bun-build

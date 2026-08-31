@@ -10,7 +10,7 @@ URL    ?= http://127.0.0.1:8080/mcp
 PORT   ?= 8080
 ARGS   ?=
 PREFIX ?= $(HOME)/.local/bin
-BIN    := dist/ymcprobe
+BIN    := ymcprobe
 
 .DEFAULT_GOAL := help
 
@@ -34,8 +34,8 @@ help: ## Show this help
 	@echo "  make web URL=http://localhost:8787/mcp ARGS='--all-tools'"
 	@echo "  make fixture PORT=8081 &"
 	@echo "  make install                   # dependencies"
-	@echo "  make link                      # ymcprobe on PATH, symlinked to dist/"
-	@echo "  make distribute                # ymcprobe on PATH, copied"
+	@echo "  make distribute                # build, then ymcprobe on PATH"
+	@echo "  make clean                     # drop the binary and build scratch"
 	@echo
 	@echo "Full flag list: bun run src/cli.tsx --help"
 
@@ -44,31 +44,33 @@ install: ## Install dependencies
 	bun install
 
 .PHONY: build
-build: ## Compile a standalone binary into dist/ (no bun needed to run it)
-	@mkdir -p dist
+build: ## Compile the standalone binary ./ymcprobe (no bun needed to run it)
 	bun build src/cli.tsx --compile --outfile $(BIN)
+	@# `bun build --compile` leaves a 63 MB .<hash>-00000000.bun-build scratch
+	@# file behind on every run. Sweep them here, not only in `clean`, or a
+	@# handful of rebuilds quietly costs a gigabyte.
+	@rm -f .*.bun-build
 	@ls -lh $(BIN)
 
-.PHONY: link
-link: build ## Symlink the built binary into PREFIX — rebuilds are picked up
+.PHONY: distribute
+distribute: build ## Symlink ./ymcprobe into PREFIX so it is on PATH
 	@mkdir -p $(PREFIX)
 	ln -sf $(abspath $(BIN)) $(PREFIX)/ymcprobe
-	@echo "linked $(PREFIX)/ymcprobe -> $(BIN)"
-	@command -v ymcprobe >/dev/null || echo "note: $(PREFIX) is not on your PATH"
-
-.PHONY: distribute
-distribute: build ## Copy the built binary into PREFIX — survives deleting this tree
-	@mkdir -p $(PREFIX)
-	@# Drop any existing entry first: over a `make link` symlink, install(1)
-	@# follows it and refuses with "are the same file".
-	@rm -f $(PREFIX)/ymcprobe
-	install -m 755 $(BIN) $(PREFIX)/ymcprobe
-	@echo "copied $(BIN) -> $(PREFIX)/ymcprobe"
+	@echo "linked $(PREFIX)/ymcprobe -> $(abspath $(BIN))"
 	@command -v ymcprobe >/dev/null || echo "note: $(PREFIX) is not on your PATH"
 
 .PHONY: uninstall
-uninstall: ## Remove whatever link or distribute put at PREFIX
+uninstall: ## Remove what distribute put at PREFIX
 	rm -f $(PREFIX)/ymcprobe
+
+.PHONY: clean
+clean: ## Remove the binary and any leftover build scratch files
+	rm -f $(BIN) .*.bun-build
+	@echo "cleaned"
+
+.PHONY: distclean
+distclean: clean ## clean, plus node_modules
+	rm -rf node_modules
 
 .PHONY: run
 run: ## Start the TUI against URL

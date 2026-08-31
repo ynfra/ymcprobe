@@ -19,9 +19,7 @@ separate API key and no account.
 make            # target list, variables and examples
 make install    # dependencies
 
-# put ymcprobe on PATH — pick one
-make link       # symlink PREFIX/ymcprobe -> dist/ymcprobe, so a rebuild is live
-make distribute # copy the binary, so it survives deleting this tree
+make distribute # build ./ymcprobe and symlink it onto PATH
 
 ymcprobe http://localhost:8080/mcp
 
@@ -58,10 +56,10 @@ bun run src/cli.tsx http://127.0.0.1:8080/mcp
 | `bun run preview` | no LLM, no server | Render the TUI against scripted events |
 | `bun run smoke` | needs the fixture running | End-to-end check that tool events still arrive |
 | `make install` | `bun install` | Install dependencies |
-| `make build` | `dist/ymcprobe`, ~62 MB | Compile a standalone binary |
-| `make link` | `PREFIX=~/.local/bin` | Symlink that binary onto PATH |
-| `make distribute` | `PREFIX=~/.local/bin` | Copy that binary onto PATH |
-| `make uninstall` | | Remove whatever `link`/`distribute` put there |
+| `make build` | `./ymcprobe`, ~62 MB | Compile the standalone binary |
+| `make distribute` | `PREFIX=~/.local/bin` | Build, then symlink it onto PATH |
+| `make uninstall` | | Remove what `distribute` put there |
+| `make clean` | | Drop the binary and build scratch files |
 | `bun run typecheck` | `tsc --noEmit` | Type check |
 
 `make` wraps the common paths: `make run URL=…`, `make web URL=…`,
@@ -93,11 +91,12 @@ Flags: `-H/--header` (repeatable), `-m/--model`, `--models`, `-p/--port`,
 - Long tool output is clamped in the web UI with a **show more** toggle, and
   truncated to one line each in the TUI. One chatty tool otherwise pushes the
   whole trace off screen.
-- `make link` is the one to use while developing: `PREFIX/ymcprobe` points at
-  `dist/ymcprobe`, so the next `make build` is live with no reinstall.
-  `make distribute` copies instead, so the command keeps working even if this
-  checkout moves or goes away. Both land in `PREFIX` (default `~/.local/bin`)
-  and `make uninstall` removes either.
+- `make distribute` symlinks rather than copies, so the next `make build` is
+  live with no reinstall. The flip side: `make clean` leaves the symlink
+  dangling and `ymcprobe` is "command not found" until you build again.
+- **`bun build --compile` leaks a 63 MB scratch file per run.** `make build`
+  sweeps them itself; `make clean` also drops the binary, and `make distclean`
+  takes `node_modules` with it.
 - The compiled binary still needs **`opencode` on PATH** — it embeds ymcprobe,
   not the agent it drives.
 - Permission prompts are auto-approved. This is a test harness, so do not aim
