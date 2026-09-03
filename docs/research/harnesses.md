@@ -97,5 +97,5 @@ justify a rewrite.
 - **Auth gets hard.** The moment we test servers behind OAuth or per-request
   headers, read Codex's `http_headers` / `env_http_headers` / OAuth handling
   before building our own.
-- **opencode's SSE breaks again** (see the regression note in `AGENTS.md`).
+- **opencode's SSE breaks again** (see [opencode-server.md](opencode-server.md)).
   Fallback order is fx, then `codex exec --json` — not pi.

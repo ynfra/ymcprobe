@@ -103,4 +103,5 @@ Flags: `-H/--header` (repeatable), `-m/--model`, `--models`, `-p/--port`,
 - TUI keys: `esc` interrupts a turn, `ctrl-u` clears the line, `ctrl-w` rubs
   out a word, `/quit` exits.
 
-See [AGENTS.md](AGENTS.md) for conventions, internals, and day-2 operations.
+See [AGENTS.md](AGENTS.md) for conventions, internals, and day-2 operations, and
+[CHANGELOG.md](CHANGELOG.md) for what changed.

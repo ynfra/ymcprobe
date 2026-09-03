@@ -1,8 +1,28 @@
 # ymcprobe — Agent Guide
 
 Drives a headless `opencode` against one or more remote MCP servers so you can
-see whether an LLM actually invokes their tools, and with what arguments.
-Two front-ends, one state machine.
+see whether an LLM actually invokes their tools, and with what arguments. Two
+front-ends, one state machine. Everything here serves one constraint: **what
+the trace shows must be what the stream delivered.**
+
+- `README.md` — what it is and how to run it
+- `PRD.md` — scope, requirements and acceptance criteria
+- `CHANGELOG.md` — command-facing changes by date
+- `docs/adr/` — durable decisions as ADRs
+- `docs/research/` — measured behaviour of `opencode serve` and `ink`
+
+Read the relevant ones before changing what they cover, and update them when a
+change bends a decision or contradicts a finding.
+
+## Stack
+
+- Bun and TypeScript, ESM, `strict` with `noUncheckedIndexedAccess`
+- Ink for the TUI, plain DOM for the browser UI
+- A direct streamable-HTTP MCP client, hand-written
+- `opencode serve` as a spawned child, driven over `fetch` and one SSE stream
+
+`bun install` once, then `make` with no target prints the list. Every target
+self-documents via its `## ` comment.
 
 ## Architecture
 
@@ -28,59 +48,13 @@ ymcprobe (bun)
 
 Two independent connections to the same MCP server is deliberate: the direct
 one proves what the server advertises, the opencode one shows what the model
-chose to do with it. When the two disagree, that gap is the finding.
+chose to do with it. When the two disagree, that gap is the finding
+([ADR 0002](docs/adr/0002-two-connections-per-server.md)).
 
 **`src/session.ts` is the only place the trace is computed.** Both front-ends
 feed it raw opencode events and render its output. Anything added to one UI
-that changes what a trace *means* belongs in the reducer, not the view.
-
-## Why plain `fetch` and not `@opencode-ai/sdk`
-
-Every endpoint used here was pinned against the server's own OpenAPI document
-(`GET /doc` on a running instance — the fastest way to re-check a contract
-after an opencode bump). Dropping the SDK removes a version-coupled dependency
-for maybe thirty lines of wrapper code.
-
-## Facts worth not rediscovering
-
-- **MCP servers can be added at runtime.** `POST /mcp` with `{name, config}`
-  connects immediately. No restart, no config file.
-- **`--port 0` does not allocate a random port**, it falls back to 4096. Pass a
-  real port and parse `listening on <url>` back off stdout as the readiness
-  signal. Startup is ~3-5s.
-- **`/experimental/tool` lists built-ins only.** MCP tools are injected at
-  prompt time and never appear there, which is why the inventory comes from
-  our own `tools/list` call.
-- **MCP tools are namespaced `<registered-name>_<tool>`**, e.g. `probe_echo`.
-  `splitTool()` maps that back to a server so the UI can group by it.
-- **Built-ins are muted per request** via the `tools: {name: false}` map on the
-  prompt body. The agent-config `tools` key is deprecated; this is not.
-- **The prompt body also takes `system`.** Without a system prompt the model
-  treats MCP tools as optional trivia and answers from memory, which makes the
-  harness useless. See `src/prompt.ts` — it lists tool *names* only, because
-  opencode already sends each tool's description and schema, and on a real
-  16-tool server repeating them costs thousands of tokens per turn.
-- **Model selection has no global default.** `GET /config/providers` returns a
-  `default` map of provider → model plus a full catalogue per provider. A bare
-  `--model` resolves across every authenticated provider; ties break toward
-  `github-copilot`, then toward each provider's own default, and anything
-  still ambiguous is an error rather than a guess.
-- **`capabilities.toolcall` is on every model entry.** Picking a model that
-  cannot call tools is a silent dead end, so the header warns.
-- **Token counts and cost ride on `message.updated`**, on the assistant message
-  once `time.completed` is set — not on any part event.
-
-## The regression to watch
-
-The whole trace hangs on one event, `message.part.updated`. It silently
-stopped being delivered on the `/event` SSE stream in opencode 1.14.42 through
-1.15.1 ([#27966](https://github.com/anomalyco/opencode/issues/27966)) — the
-server logged the publish, subscribers got nothing.
-
-`bun run smoke` exists for exactly this: it boots the stack against the bundled
-fixture and fails if no completed tool call reaches the stream. **Run it after
-every opencode bump.** It costs one real LLM call. `MCP_URLS` (comma
-separated), `MCP_MODEL` and `MCP_PROMPT` override what it exercises.
+that changes what a trace *means* belongs in the reducer, not the view
+([ADR 0003](docs/adr/0003-one-reducer-computes-the-trace.md)).
 
 ## Layout
 
@@ -99,44 +73,34 @@ separated), `MCP_MODEL` and `MCP_PROMPT` override what it exercises.
 | `src/web-client.ts` | browser UI, plain DOM, bundled at serve() time |
 | `src/preview.tsx` | renders the TUI against scripted events, no LLM spend |
 | `src/smoke.ts` | headless end-to-end assertion |
-| `fixtures/echo-mcp.ts` | 4-tool MCP server (`echo`, `add`, `boom`, `lorem`) |
-| `Makefile` | `make` with no target prints the help; targets self-document via `## ` |
 | `src/bundle-client.ts` | build-time macro that inlines the browser bundle |
+| `fixtures/echo-mcp.ts` | 4-tool MCP server (`echo`, `add`, `boom`, `lorem`) |
 | `patches/ink@6.8.0.patch` | empties ink's dev-only devtools module so nothing imports `react-devtools-core` |
+| `Makefile` | `make` with no target prints the help; targets self-document via `## ` |
 
-The fixture is one tool per branch the UI has to render: `echo` and `add`
-succeed, `boom` always fails, and `lorem` returns more text than fits on
-screen. `PORT=8081 bun run fixture` gives you a second server to test grouping
-with. The README screenshot is taken against these, never a real server — the
-split repo is public.
+## Development
 
-## Terminal input
+- Keep changes small and scoped to the requested behaviour.
+- Flags, defaults, the `name=url` syntax, `--json` output and the `make` verbs
+  are public behaviour. Treat a change to them as a product change and record
+  it in `CHANGELOG.md`.
+- Runtime dependencies are `ink` and `react`. The browser UI has none. Adding a
+  third needs a reason that survives [ADR 0004](docs/adr/0004-plain-fetch-not-the-sdk.md).
+- Measure opencode or ink behaviour before coding around it, and record it in
+  `docs/research/` rather than in a comment.
+- Errors reach the user as one sentence, never a Bun stack trace. `EADDRINUSE`
+  from a `--web` instance left running is the common case.
+- Header values are credentials. They go to the servers under test and to
+  nothing else, including logs, the page and `--json`.
+- Keep comments rare; explain why, not what.
 
-`ink-text-input` loses keystrokes here, for two reasons worth knowing before
-anyone "simplifies" `src/input.tsx` back to it:
+### Front-end rules
 
-- Ink only sets `key.backspace` / `key.delete` when a rub-out arrives alone in
-  its own read. Held down or pasted, the chunk arrives as raw `0x7f` bytes with
-  **no key flag at all**, so `input` has to be walked character by character.
-- `useInput`'s callback closes over the value from its render. Two events
-  landing before React re-renders both see the same text and one deletion is
-  lost. A ref updated synchronously keeps them composing.
-
-## Laying out the TUI
-
-- **Wrap to the box's measured width, never to `stdout.columns`.** When output
-  is piped, `columns` reports a width Ink does not use, Ink shrinks the box to
-  the real terminal, and then re-wraps our already-wrapped lines into ragged
-  thirds. `measureElement` on a `flexGrow` box is the only width worth
-  trusting.
-- **`<Text>{""}</Text>` collapses to nothing.** Blank separator lines need a
-  single space.
-
-`bun run preview` renders the whole layout from a scripted event stream —
-several servers, a dead one, a failed call — with no LLM spend.
-
-## Web UI details worth keeping
-
+- **Wrap to the box's measured width, never `stdout.columns`**, and use a
+  single space rather than an empty `<Text>` for a blank line. Both are ink
+  quirks with real symptoms ([ink-behaviour.md](docs/research/ink-behaviour.md)).
+- **Do not "simplify" `src/input.tsx` back to `ink-text-input`.** It loses
+  keystrokes for two measured reasons, recorded in the same document.
 - **Clamp tool output.** A single article-fetching tool returns tens of
   kilobytes and buries every other call in the trace. `clampable()` caps each
   block and offers *show more*; the expanded ids live outside the entry list so
@@ -145,90 +109,40 @@ several servers, a dead one, a failed call — with no LLM spend.
   count and the column stops being scannable — real tool names like
   `fetch_support_article` are long enough to hit this.
 
-## Getting it onto PATH
+## Testing
 
-The Makefile follows `fxstack/fxgit`: `BIN` / `ENTRY` / `BIN_DIR` variables, a
-single `.PHONY` line, `help` as the default goal extracting `## ` comments, and
-`install` / `build` / `link` / `ship` / `clean` meaning what they do there.
-Keep it that way — the point is that every fx-style tool answers to the same
-five verbs.
+- `make typecheck` on every change.
+- `make preview` renders the whole layout from a scripted event stream —
+  several servers, a dead one, a failed call — with no LLM spend. Piping it is
+  also the ink-version canary: 190 lines on ink 6.8.0, zero on ink 7.
+- `make smoke` boots the stack against the bundled fixture and fails if no
+  completed tool call reaches the stream. It costs one real LLM call.
+  `MCP_URLS` (comma separated), `MCP_MODEL` and `MCP_PROMPT` override what it
+  exercises.
+- The fixture is one tool per branch the UI has to render: `echo` and `add`
+  succeed, `boom` always fails, and `lorem` returns more text than fits on
+  screen. `make fixture PORT=8081` gives you a second server to test grouping
+  with.
+- The README screenshot is taken against the fixture, never a real server: the
+  split repo is public.
 
-`make install` installs *dependencies* and does not touch PATH. `make link`
-symlinks `$(CURDIR)/ymcprobe` into `~/.local/bin`, `make ship` is `build` then
-`link`, and `make uninstall` removes the symlink.
+## Operations
 
-The symlink means a rebuild needs no reinstall, at the cost of `make clean`
-leaving it dangling until the next `make build`.
-
-## Compiling a standalone binary
-
-`make build` produces a minified `./ymcprobe` (~61 MB) that runs without bun. It still
-needs `opencode` on PATH — the binary embeds ymcprobe, not the agent it drives.
-
-**`bun build --compile` leaves a 63 MB `.<hash>-00000000.bun-build` scratch
-file behind on every single run.** `make build` deletes them itself rather than
-leaving it to `clean`, because they are gitignored and invisible: this tree had
-accumulated ten of them, 718 MB, before anyone looked.
-
-Two things had to change to make that possible, and both will look like
-pointless indirection to anyone who did not hit them:
-
-- **The browser client is bundled by a build-time macro**, `src/bundle-client.ts`
-  imported `with { type: "macro" }`. A compiled binary has no source tree, so
-  the old runtime `Bun.build()` call failed the moment ymcprobe ran from
-  anywhere but this directory. The macro shells out to `bun build` rather than
-  calling `Bun.build()` directly — a macro cannot start a second bundle while
-  the bundler is waiting on it.
-- **ink is patched to drop its React DevTools bridge**, via
-  `patchedDependencies` in `package.json` and `patches/ink@6.8.0.patch`. The
-  patch empties `ink/build/devtools.js`, whose `react-devtools-core` import is
-  the only reason that package was ever referenced here.
-
-  It has to be a patch, because the import cannot be routed around. ink's
-  reconciler does `await import('./devtools.js')` behind an `isDev()` guard;
-  the guard is a function call, so the branch is never provably dead and the
-  bundler always walks into `devtools.js`. Measured, all failing:
-
-  | Attempt | Result |
-  |---|---|
-  | just remove it | `Could not resolve: "react-devtools-core"`, no binary |
-  | `--external react-devtools-core` | builds; binary dies at startup with `Cannot find package` |
-  | `--external './devtools.js'` | still resolves the inner import |
-  | `--define process.env.DEV="false"` | missed: ink reads `process.env['DEV']` with bracket notation |
-  | `--allow-unresolved '*'` | only covers dynamic specifiers, this one is static |
-  | `--conditions production` | no effect |
-
-  Two earlier shapes of this workaround are gone: a `stubs/react-devtools-core/`
-  fake package wired in as a `file:` dependency, and a `tsconfig.json` `paths`
-  alias to a local noop module. Both worked; the patch is preferable because it
-  leaves no phantom package in `dependencies` and no file whose only purpose is
-  to be resolved.
-
-  **Do not "fix" this by upgrading to ink 7.** ink 7 does guard the import with
-  `import.meta.resolve` in a try/catch, but the bundler still walks into
-  `devtools.js`, so the build fails exactly the same way — and ink 7 renders
-  nothing when stdout is piped, which silently kills `bun run preview | …`
-  (190 lines of TUI on ink 6.8.0, zero on 7.1.1).
-
-  **On an ink bump `bun install` will fail because the patch no longer
-  applies.** That is the intended alarm, not a problem: regenerate with
-  `bun patch ink`, empty `build/devtools.js`, `bun patch --commit ink`, then
-  re-check `bun run preview | wc -l` against 190.
-
-## Why the web UI proxies everything
-
-Nothing in a page can spawn `opencode serve`, and a target MCP server almost
-never sends CORS headers, so a static page plus `opencode serve --cors` is not
-a shortcut that exists. `src/web.ts` is the origin: it serves the page, proxies
-prompts, and relays the SSE stream. Permission auto-approval happens there too,
-never in the browser.
-
-Binding failures are reported as a sentence, not a Bun stack trace: leaving a
-`--web` instance running is the normal way to hit `EADDRINUSE`, and the spawned
-opencode child is killed on the way out rather than orphaned.
+- **Run `make smoke` after every opencode bump.** The whole trace hangs on one
+  event that has silently stopped being delivered once before, and nothing else
+  fails when it does ([opencode-server.md](docs/research/opencode-server.md)).
+- **On an ink bump `bun install` fails because the patch no longer applies.**
+  That is the intended alarm. Regenerate with `bun patch ink`, empty
+  `build/devtools.js`, `bun patch --commit ink`, then re-check
+  `bun run preview | wc -l` against 190. Do not sidestep it by upgrading to
+  ink 7.
+- `make ship` is `build` then `link`, and the five fx-style verbs mean what
+  they mean in `fxstack/fxgit` — keep them that way
+  ([ADR 0008](docs/adr/0008-compiled-binary-on-path.md)). `make install`
+  installs *dependencies* and does not touch PATH.
+- `make clean` leaves the symlink dangling until the next `make build`.
 
 ## Conventions
 
-- Bun + TypeScript, ESM, `strict` with `noUncheckedIndexedAccess`.
-- Runtime dependencies: `ink` and `react`. The browser UI has none.
 - Commits: `[ymcprobe] lowercase imperative summary`.
+- The component's documents follow [.ytemplate](../.ytemplate/README.md).
